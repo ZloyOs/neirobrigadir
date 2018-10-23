@@ -1,0 +1,68 @@
+version: '2'
+services:
+  redis:
+    image: redis
+    restart: unless-stopped
+    expose:
+      - '6379'
+    volumes:
+      - './VOLUMES/redisdata:/data'
+    depends_on:
+      - postgres
+  postgres:
+    image: postgres
+    build: ./postgres
+    restart: unless-stopped
+    expose:
+      - '5432'
+    environment:
+      - LANG=C.UTF-8
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - './VOLUMES/postgres-db:/var/lib/postgresql/data'
+    ports:
+      - '5432:5432'
+  nginx:
+    image: nginx
+    restart: always
+    build: ./nginx/
+    ports:
+      - '8000:80'
+    links:
+      - engine
+  engine:
+    image: ubuntu
+    build: ./engine
+    volumes:
+      - './VOLUMES/enginedata:/usr/src/app'
+    depends_on:
+      - pure-ftpd
+      - redis
+    expose:
+      - '8000'
+    command: gunicorn helloworld_project.wsgi -b 0.0.0.0:8000
+  pure-ftpd:
+    image: stilliard/pure-ftpd
+    volumes:
+      - './VOLUMES/enginedata:/home/ftpusers/django'
+      - './VOLUMES/pure-ftpd:/etc/pure-ftpd/passwd'
+    ports:
+      - '21:21'
+      - '10000-10009:10000-10009'
+    environment:
+      - FTP_USER_NAME=django
+      - FTP_USER_PASS=django
+      - FTP_USER_HOME=/home/ftpusers/django
+      - FTP_PASSIVE_PORTS=10000:10009
+    expose:
+      - '10000-10009'
+    restart: always
+  anaconda3:
+    image: continuumio/anaconda3
+    ports: []
+    environment: []
+    command: /bin/bash -c "/opt/conda/bin/conda install jupyter -y --quiet && mkdir /opt/notebooks && /opt/conda/bin/jupyter notebook --notebook-dir=/opt/notebooks --ip='*' --port=8888 --no-browser --allow-root"
+    depends_on:
+      - pure-ftpd
