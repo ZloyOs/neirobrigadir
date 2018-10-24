@@ -1,14 +1,34 @@
 version: '2'
 services:
-  redis:
-    image: redis
-    restart: unless-stopped
-    expose:
-      - '6379'
+  engine:
+    image: ubuntu
+    build: ./engine
     volumes:
-      - './VOLUMES/redisdata:/data'
+      - './VOLUMES/enginedata:/usr/src/app'
     depends_on:
-      - postgres
+      - pure-ftpd
+      - redis
+    expose:
+      - '8000'
+    stdin_open: true
+    tty: true
+    command: 'gunicorn helloworld_project.wsgi -b 0.0.0.0:8000'
+  pure-ftpd:
+    image: stilliard/pure-ftpd
+    volumes:
+      - './VOLUMES/enginedata:/home/ftpusers/django'
+      - './VOLUMES/pure-ftpd:/etc/pure-ftpd/passwd'
+    ports:
+      - '21:21'
+      - '10000-10009:10000-10009'
+    environment:
+      - FTP_USER_NAME=django
+      - FTP_USER_PASS=django
+      - FTP_USER_HOME=/home/ftpusers/django
+      - 'FTP_PASSIVE_PORTS=10000:10009'
+    expose:
+      - 10000-10009
+    restart: always
   postgres:
     image: postgres
     build: ./postgres
@@ -32,37 +52,12 @@ services:
       - '8000:80'
     links:
       - engine
-  engine:
-    image: ubuntu
-    #build: ./engine
-    volumes:
-      - './VOLUMES/enginedata:/usr/src/app'
-    depends_on:
-      - pure-ftpd
-      - redis
+  redis:
+    image: redis
+    restart: unless-stopped
     expose:
-      - '8000'
-    command: gunicorn helloworld_project.wsgi -b 0.0.0.0:8000
-  pure-ftpd:
-    image: stilliard/pure-ftpd
+      - '6379'
     volumes:
-      - './VOLUMES/enginedata:/home/ftpusers/django'
-      - './VOLUMES/pure-ftpd:/etc/pure-ftpd/passwd'
-    ports:
-      - '21:21'
-      - '10000-10009:10000-10009'
-    environment:
-      - FTP_USER_NAME=django
-      - FTP_USER_PASS=django
-      - FTP_USER_HOME=/home/ftpusers/django
-      - FTP_PASSIVE_PORTS=10000:10009
-    expose:
-      - '10000-10009'
-    restart: always
-  anaconda3:
-    image: continuumio/anaconda3
-    ports: []
-    environment: []
-    command: /bin/bash -c "/opt/conda/bin/conda install jupyter -y --quiet && mkdir /opt/notebooks && /opt/conda/bin/jupyter notebook --notebook-dir=/opt/notebooks --ip='*' --port=8888 --no-browser --allow-root"
+      - './VOLUMES/redisdata:/data'
     depends_on:
-      - pure-ftpd
+      - postgres
