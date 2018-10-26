@@ -1,22 +1,50 @@
 version: '2'
 services:
+#---------------------------------------------------------------
+  flow-analyzer-server:
+    image: ubuntu:16.04
+    build: ./flow-analyzer
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    expose:
+      - '2222'
+    volumes:
+      - './VOLUMES/flow-analyzer/server:/mnt/src'
+    ports:
+      - '2222:2222'
+    #command: 'docker run --rm -p 2222:2222 --runtime=nvidia -v ~/LAB/SRC/server:/mnt/src flow-analyzer /root/anaconda2/envs/Tensorflow-GPU/bin/python /mnt/src/script.py -host="localhost:2222" -gpu_devices="0"'
+    command: '/root/anaconda2/envs/Tensorflow-GPU/bin/python /mnt/src/script.py -host="localhost:2222" -gpu_devices="0"'
+#---------------------------------------------------------------
+  flow-analyzer-client:
+    image: ubuntu:16.04
+    build: ./flow-analyzer
+    restart: unless-stopped
+#    restart: always
+    volumes:
+      - './VOLUMES/flow-analyzer/client:/mnt/src'
+    command: '/root/anaconda2/envs/Tensorflow/bin/python /mnt/src/script.py -use_tf_server=1 -tf_host="grpc://192.168.1.85:2222" -graph_folder="/mnt/src/graph/" -input_image="/mnt/src/images/1.jpg" -output_images="/mnt/src/images/" -count_iterations=10'
+#---------------------------------------------------------------
   engine:
     image: ubuntu
     build: ./engine
     volumes:
-      - './VOLUMES/enginedata:/usr/src/app'
+      - './VOLUMES/enginedata:/mnt/src'
+      - './VOLUMES/flow-analyzer/client/images:/mnt/images'
     depends_on:
       - pure-ftpd
       - redis
     expose:
       - '8000'
-    stdin_open: true
-    tty: true
     command: 'gunicorn helloworld_project.wsgi -b 0.0.0.0:8000'
+#---------------------------------------------------------------
   pure-ftpd:
     image: stilliard/pure-ftpd
+    restart: unless-stopped
     volumes:
-      - './VOLUMES/enginedata:/home/ftpusers/django'
+      - './VOLUMES/enginedata:/home/ftpusers/django/portal'
+      - './VOLUMES/flow-analyzer:/home/ftpusers/django/flow'
       - './VOLUMES/pure-ftpd:/etc/pure-ftpd/passwd'
     ports:
       - '21:21'
@@ -28,7 +56,7 @@ services:
       - 'FTP_PASSIVE_PORTS=10000:10009'
     expose:
       - 10000-10009
-    restart: always
+#---------------------------------------------------------------
   postgres:
     image: postgres
     build: ./postgres
@@ -44,6 +72,7 @@ services:
       - './VOLUMES/postgres-db:/var/lib/postgresql/data'
     ports:
       - '5432:5432'
+#---------------------------------------------------------------
   nginx:
     image: nginx
     restart: always
@@ -52,6 +81,7 @@ services:
       - '8000:80'
     links:
       - engine
+#---------------------------------------------------------------
   redis:
     image: redis
     restart: unless-stopped
